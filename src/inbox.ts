@@ -1,5 +1,4 @@
-import { TFile, normalizePath, type App } from 'obsidian';
-import moment from 'moment';
+import { TFile, normalizePath, moment, type App } from 'obsidian';
 import { appHasDailyNotesPluginLoaded, getDailyNote, getAllDailyNotes, createDailyNote } from 'obsidian-daily-notes-interface';
 import { parseTasks, capture } from './markdown';
 import type { TaskStore } from './store';
@@ -33,7 +32,7 @@ export class DailyNoteInbox {
   constructor(private app: App, private store: TaskStore, private guard: WriteGuard) {}
   async file(): Promise<TFile> {
     if (appHasDailyNotesPluginLoaded()) {
-      const today = moment(); // The user's runtime local date, never the remote due date.
+      const today = (moment as unknown as () => import('moment').Moment)(); // The user's runtime local date, never the remote due date.
       const file = getDailyNote(today, getAllDailyNotes()) || await createDailyNote(today);
       if (!file) throw new Error('Daily Notes could not create today’s note. Check its folder/template settings.'); return file;
     }

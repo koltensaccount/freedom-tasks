@@ -11,7 +11,7 @@ Dates, identities, source links, and synchronization metadata stay in plugin dat
 
 ## Install the beta
 
-Use BRAT with `koltensaccount/freedom-tasks` and choose the prerelease `0.1.0-beta.1`, or copy `main.js`, `manifest.json`, and `styles.css` from the release into `.obsidian/plugins/freedom-tasks` and enable Freedom Tasks.
+Use BRAT with `koltensaccount/freedom-tasks` and choose the prerelease `0.1.0-beta.2`, or copy `main.js`, `manifest.json`, and `styles.css` from the release into `.obsidian/plugins/freedom-tasks` and enable Freedom Tasks.
 
 Full Calendar Remastered is required. The verified current plugin ID is `full-calendar-remastered`. Add a dedicated **CalDAV Tasks** source there; ordinary CalDAV event sources are excluded. Freedom Tasks never asks for remote credentials.
 

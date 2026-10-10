@@ -1,16 +1,11 @@
-Freedom Tasks 0.1.0-beta.1
+Freedom Tasks 0.1.0-beta.2
 
-Standalone Obsidian plugin for scheduled plain Markdown tasks through Full Calendar Remastered's public API.
+Fixes the Obsidian load failure in beta.1: `Cannot find module 'moment'`.
 
-- Native setup, managed dedicated CalDAV Tasks sources, focus/command scheduling, date-only/time decorations, transient mobile/desktop task controls.
-- Persisted UID mappings, three-way field reconciliation, guarded Markdown updates, today's Daily Note ingestion, source links, conflicts and repair.
-- Scheduled-only v1: remote deletion or removal of a date retains Markdown and a detached tombstone; same-UID rescheduling reconnects.
-- Five minimal scopes; no direct CalDAV, credentials, full-access scopes, or internal cache subscriptions.
+The Daily Note integration now uses Obsidian's exported Moment instance. The production bundle no longer requires the bare `moment` package. No features or synchronization behavior changed.
 
-Beta boundaries: priority is deferred; existing recurring tasks are read-only to avoid FCR's completion-reset behavior. Provider refresh has one bounded follow-up. Concurrent multi-device writes and actual Nextcloud/touch UI behavior require manual acceptance checks.
+Validated with a production build, a runtime-require audit, and a real plugin load smoke test in Obsidian 1.14.4 with Full Calendar Remastered absent. The plugin loads and shows its graceful required-dependency state. No full test suite was run for this packaging fix.
 
-Install the attached main.js, manifest.json, and styles.css, or select this prerelease through BRAT. Full Calendar Remastered with a dedicated CalDAV Tasks source is required.
+Runtime modules are limited to `obsidian`, `@codemirror/state`, and `@codemirror/view`. The Daily Notes helper and its ordinary dependencies are bundled.
 
-See MANUAL_TESTS.md and COMPATIBILITY.md in the repository. No live Nextcloud acceptance is claimed.
-
-Validation: 64 targeted tests passed; TypeScript check and production build passed; Serena TypeScript project health check passed.
+Install/update through BRAT, or use the attached main.js, manifest.json, and styles.css. Beta.1 is retained unchanged.

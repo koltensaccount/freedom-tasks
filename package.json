@@ -1,0 +1,23 @@
+{
+  "name": "freedom-tasks",
+  "version": "0.1.0-beta.1",
+  "private": true,
+  "description": "Plain Markdown tasks connected to Full Calendar Remastered",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc --noEmit && node esbuild.config.mjs"
+  },
+  "dependencies": {
+    "obsidian-daily-notes-interface": "^0.9.5"
+  },
+  "devDependencies": {
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "^1.8.7",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.0"
+  }
+}

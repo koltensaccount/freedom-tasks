@@ -1,0 +1,40 @@
+.freedom-task-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  margin-inline-start: var(--size-4-2);
+  padding: var(--size-2-1) var(--size-2-2);
+  min-height: 28px;
+  max-width: 100%;
+  font-size: var(--font-smaller);
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-s);
+  box-shadow: none;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+}
+.freedom-task-action:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.freedom-task-action:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.freedom-task-action svg { width: var(--icon-size); height: var(--icon-size); }
+.freedom-calendar-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.freedom-task-modal { width: min(420px, calc(100vw - 24px)); border-radius: var(--radius-m); }
+.freedom-task-modal .modal-title { font-size: var(--font-ui-medium); overflow-wrap: anywhere; }
+.freedom-task-modal .setting-item { padding: var(--size-4-3) 0; }
+.freedom-task-modal .setting-item-control { gap: var(--size-4-2); flex-wrap: wrap; }
+.freedom-task-modal input { max-width: 180px; }
+.freedom-task-links { border-top: 1px solid var(--background-modifier-border); margin-top: var(--size-4-2); }
+.freedom-task-anchored .modal-bg { background: transparent; }
+.freedom-task-anchored .modal { position: fixed; margin: 0; max-height: calc(100vh - 24px); }
+.freedom-subtle { color: var(--text-muted); font-size: var(--font-ui-small); }
+.freedom-conflict { border-top: 1px solid var(--background-modifier-border); padding: var(--size-4-3) 0; overflow-wrap: anywhere; }
+.freedom-settings h3 { margin-top: var(--size-4-6); }
+@media (max-width: 600px) {
+  .freedom-task-action { min-height: 36px; }
+  .freedom-task-modal { width: 100%; margin-top: auto; }
+  .freedom-task-modal button, .freedom-task-modal input, .freedom-task-modal select { min-height: 44px; }
+  .freedom-task-modal .setting-item { flex-wrap: wrap; gap: var(--size-4-2); }
+}
+@media (prefers-reduced-motion: reduce) { .freedom-task-modal, .freedom-task-action { transition: none; animation: none; } }

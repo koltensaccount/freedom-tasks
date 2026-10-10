@@ -1,0 +1,9 @@
+{
+  "id": "freedom-tasks",
+  "name": "Freedom Tasks",
+  "version": "0.1.0-beta.1",
+  "minAppVersion": "1.8.0",
+  "description": "Schedule plain Markdown tasks through Full Calendar Remastered and sync them with your task calendars.",
+  "author": "Kolten Bendickson",
+  "isDesktopOnly": false
+}

@@ -1,78 +1,88 @@
-# FCR compatibility spike
+# FCR compatibility
 
-Inspected 2026-10-10 using Serena symbol/reference tools. No reference source was changed or copied.
+Verified 2026-10-10 with Serena symbol/reference tools against FCR commit `e1f29e78e416079ad208ea00382f43d59400cb0d`. Tasks CalDAV Sync reference commit: `990308fb4ba2a23c39a1e8db4b9bc740905824ab`. Its diff/gate/storage symbols informed the layered design; no reference code was copied or modified.
 
-Pinned references:
-- Full Calendar Remastered: `e1f29e78e416079ad208ea00382f43d59400cb0d`
-- Tasks CalDAV Sync: `990308fb4ba2a23c39a1e8db4b9bc740905824ab` (indexed only; its sync architecture was not needed before this blocker).
+## Decision after follow-up
 
-## Decision
+**SUPPORTED V1:** scheduled/date-only/datetime VTODO synchronization through FCR's public API.
 
-Stop before plugin implementation under specification stop condition 4. Required ingestion/reconciliation and mutation of undated remote tasks cannot use FCR's current public provider/cache API. Do not silently restrict the product to dated tasks or invent dates.
+**OUT OF SCOPE V1:** actively synchronizing undated backlog items. No warning or import is generated for an unseen undated VTODO.
 
-This is NOT a created-event identity blocker. Caller-supplied VTODO UID is supported safely for dated task creation.
+**FUTURE, OPTIONAL:** expose undated VTODO enumeration through the public API so integrations can manage the entire task backlog. This is not a v1 blocker. No upstream PR is part of this work.
 
-## Verified public contract
+The earlier implementation stop was too conservative. Scheduled-only eligibility and retained detached mappings satisfy the product safely with the current public contract.
 
-- Actual manifest ID at this revision is `full-calendar-remastered`, NOT `full-calendar`. Public access is `app.plugins.plugins['full-calendar-remastered']?.api`; `FullCalendarPlugin.onload` assigns `new PublicAPI(this)`.
-- `requestAccess(pluginId, reason, requestedScopes?) -> Promise<string | null>` and `withToken(token) -> AuthorizedAPI | null`.
-- Planned scopes only: `events:read`, `events:write`, `providers:read`, `providers:write`, `ui:open-calendar`. No scopes have actually been requested.
-- `getCalendarSources(): CalendarInfo[]` returns the registry sources. Sources include `id`, `name`, `type`, and optional color fields. CalDAV sources also contain provider configuration; Freedom Tasks must project only ID/name/type/color and never persist or expose credentials.
-- Dedicated task source discriminator: `type === 'caldavtasks'`, corroborated by `CalDAVTaskProvider.type`. Require `getProviderCapabilities(id)` with `canCreate`, `canEdit`, and `canDelete` before offering a writable managed calendar. Display names are not evidence.
-- `getEvents(criteria, sorts?) -> QueryableEvent[]`; criteria include `calendarIds`, `isTask`, and `isCompleted`. Query results expose current `id`, persistent `uid`, and `calendarId`.
-- `getEventById(id): OFCEvent | null`, `getEventDetails(id): ApiEventDetails`.
-- `createEvent(calendarId, event, options?): Promise<boolean>`; `updateEvent(eventId, event, options?): Promise<boolean>`; `processEvent(eventId, processor, options?): Promise<boolean>`.
-- `deleteEvent(eventId, options?): Promise<void>` and `moveEvent(eventId, newCalendarId, newEventData?): Promise<void>`.
-- `reloadProviderNow(calendarId): void` is fire-and-forget. There is no public refresh-complete signal or cache/event subscription in `AuthorizedAPI`.
+## Public entry point and authorization
 
-## Dated task fields and identity
+Actual current manifest ID: `full-calendar-remastered` (the original specification's `full-calendar` ID does not match this revision). `FullCalendarPlugin.onload` assigns `this.api = new PublicAPI(this)`, reached through `app.plugins.plugins['full-calendar-remastered']?.api`.
 
-`OFCEvent` exposes `uid`, `title`, `description`, `allDay`, `timezone`, and typed task metadata `icalTask`. Single tasks use `type: 'single'`, `date`, `endDate`, `completed`, plus `startTime`/`endTime` for timed events. Date-only tasks use `allDay: true` without fabricated times. Queryable events expose source identity separately as `calendarId`.
+`requestAccess(pluginId, reason, requestedScopes?) -> Promise<string | null>`; `withToken(token) -> AuthorizedAPI | null`.
 
-Safe creation path: persist a pending creation intent with a fresh UID before calling `createEvent`; supply that UID in the event. The dedicated provider uses `event.uid || createRandomUid()`, writes that UID into VTODO, and returns it in the authoritative event. Cache creation retains that event before resolving true. Immediately query the selected source and match the exact UID, requiring exactly one result, to obtain its current event ID. Never match title/date. Store `(calendarId, uid)` as persistent remote identity and resolve the current session ID after refresh/restart. Queryable `id` is documented as a session/task ID, so it must not be treated as an immutable remote identifier.
+Requested scopes: `events:read`, `events:write`, `providers:read`, `providers:write`, `ui:open-calendar`. The issued plugin token is stored in Freedom Tasks plugin data. No `system:full-access`, settings scope, internal cache access, or remote credentials are used. Missing/disabled FCR and revoked tokens produce setup/reconnect state instead of crashing Obsidian.
 
-Provider `updateEvent` reads the original ICS, preserves the UID, uses ETags, and delegates selective patching to `updateVTodoCalendar`. That function patches summary/description/location/dates/completion and preserves unrelated ICS properties. Public `processEvent` should preserve all OFCEvent fields not owned by Freedom Tasks. Inherited provider deletion targets the remote object via FCR's mapping; Freedom Tasks must never construct network requests.
+## Exact public read trace
 
-## Blocking undated-task gap
+The omission occurs **before EventCache**, not in structured filtering:
 
-Evidence in the pinned source:
-- `src/providers/caldav/vtodo.ts`, `buildEvent`: `const placement = task.start || task.due; if (!placement) return null;`.
-- `CalDAVTaskProvider.getEvents` skips `!task.event`. Thus VTODOs without DTSTART/DUE do not enter the event cache.
-- `InternalAPI.getEvents` enumerates only cache events. Public `getAllEvents` also returns only cache events.
-- `CalDAVTaskService.getUndatedTasks`, `getTaskBacklogItems`, and `setTaskBacklogItemComplete` operate on a separate backlog cache/provider path.
-- `AuthorizedAPI` exposes none of these backlog read/completion/update/delete operations. Its `scheduleTask` cannot enumerate or reconcile undated tasks and would change their scheduling.
+1. `parseVTodoCalendar` parses both dated and undated VTODOs. `buildEvent` returns `null` when `task.start || task.due` is absent (`src/providers/caldav/vtodo.ts`). Undated records still exist for the separate task backlog service.
+2. `CalDAVTaskProvider.getEvents` skips `!task.event`; only dated events are returned to the event cache (`src/providers/caldav/CalDAVTaskProvider.ts`).
+3. `AuthorizedAPI.getAllEvents` delegates to `EventCache.getAllEvents`, which walks cached calendar events and returns raw collections `{ id: calendarId, events: [{ id, event }], color, editable }`. It does not add task backlog entries.
+4. `AuthorizedAPI.getEventById` delegates to `EventCache.getEventById`, then `EventStore.getEventById`: `store.get(id) || null`. It cannot find an undated task omitted from the cache. Its ID is the current cache/session ID; persistence must not rely on it surviving refresh/restart.
+5. `AuthorizedAPI.getEventDetails` delegates through `InternalAPI` to `EventStore.getEventDetails`. Missing cache events return `null`; present events return event/source/location information. It also cannot find undated backlog entries.
+6. `AuthorizedAPI.getEvents` delegates to `InternalAPI.getEvents`, which enumerates only `cache.getAllEvents`, obtains details, converts via `EventFilterSortEngine.fromStoredEvent`, then applies structured criteria/sorts. Filtering is downstream of the provider omission.
 
-Consequences: a normal new unscheduled Nextcloud task cannot be ingested; clearing a mapped task's dates remotely can make it disappear from public queries even though the remote task still exists. Treating disappearance as deletion would incorrectly unlink it. Using internal backlog services or direct CalDAV would violate the required public API boundary.
+Thus **all four reads omit undated VTODOs** at this revision. The backlog is separately retained by `CalDAVTaskService.getUndatedTasks/getTaskBacklogItems`. No current public backlog enumeration is available, and Freedom Tasks does not access these private services.
 
-Smallest proposed upstream improvement: expose a scoped public task/backlog facade using the existing provider registry/service path. It must enumerate dated AND undated VTODOs with stable `(calendarId, uid)` identity and optional dates, and support title/completion/delete operations for those identities. For example `getTasks({calendarIds})`, `processTask(taskId, processor)`, and `deleteTask(taskId)`, with existing `events:read`/`events:write` scopes. Existing event APIs can remain unchanged. Add public `refreshTasks(calendarId): Promise<void>` if needed to provide authoritative refresh completion. These are proposals, not current FCR methods.
+A cache entry may remain visible until provider refresh completes. Once an undated/deleted item leaves the cache, direct ID lookup does not reliably distinguish the reasons. V1 intentionally handles both identically: keep Markdown, remove active scheduling, retain the UID/locator/baseline tombstone, and stop active sync. Exact UID reappearance with a usable date reconnects the existing task; it never creates another Daily Note checkbox.
 
-Returning a created global ID from `createEvent` would simplify creation but is not necessary to fix identity at this revision, and does not solve the undated-task gap.
+## Sources and fields
 
-## Priority, recurrence, and triggers
+`getCalendarSources(): CalendarInfo[]` returns source configuration records. Dedicated VTODO sources have `type === 'caldavtasks'`; `CalDAVTaskProvider.type` confirms this discriminator. Only sources whose public capabilities allow create/edit/delete are offered. Display names never establish provider type. Freedom Tasks immediately projects source ID/name/color/type and never retains provider credentials.
 
-- Priority: `icalTask.priority` is typed and parsed, and creation writes PRIORITY. However ordinary `updateVTodoCalendar` never patches PRIORITY, so full priority round-trip is not safe; defer the priority UI.
-- Recurrence: existing RRULE is parsed and preserved by selective updates. The provider rejects generic `type: 'recurring'`; the serializer can create `type: 'rrule'`, but the update path does not edit RRULE. V1 should omit recurrence editing rather than assume full support.
-- With no public subscription, planned triggers remain workspace-ready load, setup, manual sync, Freedom Tasks actions, debounced mapped-note modifications, and a configurable two-minute interval. Fire-and-forget refresh requires one bounded/debounced follow-up query; absence alone cannot establish authoritative remote deletion after failed/incomplete refresh. No triggers have been implemented.
+`getEvents(criteria, sorts?) -> QueryableEvent[]`; criteria include `calendarIds`, `isTask`, `isCompleted`. Query results expose current `id`, persistent `uid`, and `calendarId`. Freedom Tasks validates a usable date/time and reads current typed event data through `getEventDetails`.
 
-## Verification and deliverables
+Single tasks use `type: 'single'`, `title`, `date`, `allDay`, optional `startTime/endTime`, `completed`, `description`, `uid`, and `icalTask`. Date-only is `allDay: true` with no invented time. RRULE tasks use `startDate` and `rrule`; they are imported/pulled without recurrence mutation.
 
-- `freedom-tasks` is a separate Serena project with explicit TypeScript server configuration and a minimal strict `tsconfig.json`.
-- Serena project health check passed overview, exact symbol lookup, and reference lookup on a temporary setup probe. The probe was removed; logs remain under ignored `.serena/`.
-- Reference indexing succeeded: FCR 441 TypeScript files; Tasks CalDAV Sync 98.
-- Live FCR lookup succeeded for `CalDAVTaskProvider`, public API types, and relevant references.
-- No plugin unit tests/build were run because implementation stopped at compatibility. No `main.js`, manifest, styles, beta, GitHub repository, or release was published.
-- No reference tracked files were modified. Only local `.serena/` configuration/index data was added, with `read_only: true`.
+## Safe creation identity and mutations
 
-## Manual acceptance checklist after the API gap is resolved
+`createEvent(calendarId, event, options?) -> Promise<boolean>` remains boolean. Safe identity is nevertheless available:
 
-1. Enable FCR and configure Nextcloud with the dedicated CalDAV Tasks source.
-2. Authorize only the five scopes above; select managed/default calendars.
-3. Schedule a plain checkbox and verify the VTODO and stable UID mapping.
-4. Verify Nextcloud title/completion changes update the correct Markdown checkbox; unchecking reopens it remotely.
-5. Change the date in FCR; verify the UI decoration changes without changing Markdown.
-6. Create dated AND undated tasks in Nextcloud; both appear once in today's configured Daily Note.
-7. Rename/move a source note and relocate its task; verify exact source navigation.
-8. Delete remote: keep/unlink Markdown. Delete a local task line: remote deletion only after relocation grace. Delete a whole note: no mass deletion.
-9. Schedule duplicate-title tasks; verify distinct mappings and ambiguous relocation enters repair.
-10. Edit offline, reconnect, and resolve same-field conflicts independently.
-11. Verify date-only state, existing RRULE preservation, unknown remote fields, and revoked authorization.
+- Persist a pending intent with a fresh UID before network mutation.
+- Supply that UID in the public OFCEvent. `CalDAVTaskProvider.createEvent` uses `event.uid || createRandomUid()` and writes the same UID into VTODO.
+- `CacheMutationHandler.addEvent` retains the authoritative event before resolving true.
+- Query the selected calendar and require exactly one exact UID match, obtaining its current event/session ID. Never match title/date.
+- Persist `(calendarId, uid)` and re-resolve the session ID after refresh/restart. Interrupted/unconfirmed creation is never retried automatically.
+
+`updateEvent(eventId, event, options?)` and `processEvent(eventId, processor, options?)` return `Promise<boolean>`. Single-task updates use `processEvent` and patch only owned fields, preserving description and unrelated typed fields. The provider reads the original ICS, applies ETags, and selectively patches summary/description/location/date/completion. Unknown ICS properties remain FCR's responsibility.
+
+`deleteEvent(eventId, options?) -> Promise<void>`. `moveEvent(eventId, newCalendarId, newEventData?) -> Promise<void>` currently creates at the destination then deletes the original. Failed partial moves must enter repair; no second Markdown import is permitted for a pending destination UID.
+
+## Priority and recurrence boundaries
+
+`icalTask.priority` is typed, parsed, and written on creation. `updateVTodoCalendar` does not patch PRIORITY, so priority does not round-trip through ordinary edits; the priority UI is deferred.
+
+Existing RRULE is parsed and preserved by selective updates. The serializer can create RRULE and the provider rejects generic `type: 'recurring'`, but there is no safe recurrence editing contract. More specifically, `applyCompletion` uses `event.type === 'single' ? Boolean(event.completed) : false`; updating an existing RRULE task can reset completion. This beta therefore makes recurring items read-only from the local side, while preserving/pulling remote state and exposing local divergences as conflicts. It never invokes an unsafe recurring mutation.
+
+## Reconciliation and refresh
+
+There is no public event/cache subscription in `AuthorizedAPI`. `reloadProviderNow(calendarId): void` delegates to a fire-and-forget provider reload and has no refresh-complete promise.
+
+Implemented triggers:
+- workspace-ready load when automatic sync is enabled;
+- successful authorization/setup;
+- manual Sync now;
+- Freedom Tasks schedule/edit/remove operations;
+- 800ms-debounced external changes to mapped notes or notes implicated in a pending relocation;
+- configurable remote interval, default two minutes;
+- one three-second follow-up query after public provider reload;
+- a bounded follow-up after the 30-second local relocation grace period.
+
+One reconciliation runs at a time; user mutations are serialized with reconciliation. Plugin-origin Markdown writes have a reentrancy guard. A missing remote item never causes Markdown or remote deletion. A local-line deletion requires confident absence, relocation grace, and a second check. Whole-note deletion enters repair.
+
+## Persistence and verification
+
+Schema version 1 lives in Obsidian plugin data via serialized `saveData`. Records contain Freedom UUID, stable remote UID/current event ID, source locator, local scheduling, synchronized field baseline, conflict evidence, timestamps, and active/detached/pending/repair/orphan state. No identity or date syntax is written to Markdown. Creation/import intents are saved first; interrupted imports enter repair rather than append duplicates.
+
+Serena projects are separate and TypeScript-configured. Initial freedom-tasks health check passed symbol/reference operations with a removed setup probe. Reference indexes: FCR 441 files; Tasks CalDAV Sync 98. Relevant public API/provider/backlog symbols and own SyncEngine were inspected via Serena.
+
+The beta's targeted unit/adapter/lifecycle tests and production build are documented in the release notes. Live Nextcloud behavior and native touch/desktop UI need the [manual acceptance checklist](MANUAL_TESTS.md); they are not claimed as tested.

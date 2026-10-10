@@ -11,4 +11,6 @@
 - Use Obsidian semantic CSS variables, accessible touch controls, and Lucide icons. No emoji or hardcoded appearance.
 - Use targeted tests for parsing, location, reconciliation, deletion, insertion, and sync integrity.
 - Use Serena symbol/reference tools for navigation when available. Reference repositories are read-only.
-- Read COMPATIBILITY.md before implementation. Required undated-task operations currently lack a public FCR contract. Stop rather than access provider internals.
+- V1 synchronizes scheduled tasks only. Undated backlog items are out of scope; do not warn or fabricate dates.
+- When a mapped remote item disappears, keep Markdown and preserve a detached tombstone. Reconnect exact UID rather than import duplicates.
+- Read COMPATIBILITY.md before changing the FCR integration contract.

@@ -54,13 +54,13 @@ export class SyncEngine {
   private remember(key: string) { if (!this.store.data.knownRemote.includes(key)) this.store.data.knownRemote.push(key); }
   async initializeCalendars(importExisting: boolean): Promise<void> {
     return this.operations.run(async () => {
-      const remotes = this.bridge.read(this.store.data.settings.managed);
+      const calendars = [...this.store.data.settings.managed]; const remotes = this.bridge.read(calendars);
       for (const remote of remotes) {
         const key = remoteKey(remote.calendarId, remote.uid);
         if (importExisting && !remote.snapshot.completed && !this.store.records().some(r => r.uid === remote.uid && r.calendarId === remote.calendarId)) await this.inbox.insert(remote);
         this.remember(key);
       }
-      for (const id of this.store.data.settings.managed) if (!this.store.data.initializedCalendars.includes(id)) this.store.data.initializedCalendars.push(id);
+      for (const id of calendars) if (!this.store.data.initializedCalendars.includes(id)) this.store.data.initializedCalendars.push(id);
       await this.store.save(); this.changed();
     });
   }
@@ -76,7 +76,19 @@ export class SyncEngine {
     }
     this.remember(remoteKey(remote.calendarId, remote.uid));
     if (record.deletionIntent) {
+      if (record.deletionIntentReason === 'localMissing') {
+        const check = await this.io.locate(record);
+        if (check.kind !== 'missing') {
+          record.deletionIntent = false; record.deletionIntentReason = undefined;
+          record.state = check.kind === 'found' ? 'active' : check.kind === 'orphaned' ? 'orphaned' : 'needsRepair';
+          record.missingSince = undefined; await this.store.save();
+          if (check.kind !== 'found') return;
+        }
+      }
+    }
+    if (record.deletionIntent) {
       await this.bridge.remove(remote); record.state = 'detached'; record.deletionIntent = false;
+      record.deletionIntentReason = undefined;
       record.detachedReason = 'Removed from calendar'; await this.store.save(); return;
     }
     const found = await this.io.locate(record);
@@ -88,8 +100,8 @@ export class SyncEngine {
     if (found.kind !== 'found') {
       const decision = deletionDecision(record, true, false, Date.now());
       if (decision === 'deleteRemote') {
-        record.deletionIntent = true; await this.store.save(); await this.bridge.remove(remote);
-        record.state = 'detached'; record.deletionIntent = false; record.detachedReason = 'Local task line removed'; await this.store.save();
+        record.deletionIntent = true; record.deletionIntentReason = 'localMissing'; await this.store.save(); await this.bridge.remove(remote);
+        record.state = 'detached'; record.deletionIntent = false; record.deletionIntentReason = undefined; record.detachedReason = 'Local task line removed'; await this.store.save();
       } else if (decision === 'wait') {
         record.missingSince ??= Date.now(); await this.store.save(); this.followup(31_000);
       } else { record.state = 'needsRepair'; await this.store.save(); }
@@ -164,8 +176,8 @@ export class SyncEngine {
     return this.operations.run(async () => {
       const record = this.store.data.tasks[id]; if (!record) return;
       const remote = this.match(record, this.bridge.read(this.store.data.settings.managed));
-      if (remote) { record.deletionIntent = true; await this.store.save(); await this.bridge.remove(remote); }
-      record.deletionIntent = false; record.state = 'detached'; record.detachedReason = 'Removed from calendar';
+      if (remote) { record.deletionIntent = true; record.deletionIntentReason = 'remove'; await this.store.save(); await this.bridge.remove(remote); }
+      record.deletionIntent = false; record.deletionIntentReason = undefined; record.state = 'detached'; record.detachedReason = 'Removed from calendar';
       await this.store.save(); this.changed();
     });
   }

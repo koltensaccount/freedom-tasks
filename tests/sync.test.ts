@@ -135,6 +135,12 @@ describe('scheduled-only reconciliation', () => {
     const f = fixture(); const r = f.map(); f.remote(); f.vault.set('Note.md', 'Before\nAfter'); await f.engine.sync();
     expect(f.remove).not.toHaveBeenCalled(); r.missingSince = Date.now() - 31_000; await f.engine.sync(); expect(f.remove).toHaveBeenCalledTimes(1); expect(r.state).toBe('detached');
   });
+  it('cancels a failed local deletion retry when the source checkbox is restored', async () => {
+    const f = fixture(); const r = f.map(); f.remote(); f.vault.set('Note.md', 'Before\nAfter'); await f.engine.sync();
+    r.missingSince = Date.now() - 31_000; f.remove.mockImplementationOnce(async () => { throw new Error('offline'); });
+    await expect(f.engine.sync()).rejects.toThrow('offline'); f.vault.set('Note.md', 'Before\n- [ ] Homework\nAfter'); await f.engine.sync();
+    expect(f.remove).toHaveBeenCalledTimes(1); expect(r.state).toBe('active'); expect(r.deletionIntent).toBe(false); expect(f.remoteEvents.has('session-uid-one')).toBe(true);
+  });
   it('cut/move to a recently modified note relinks rather than deleting', async () => {
     const f = fixture(); const r = f.map(); f.remote(); f.vault.set('Note.md', 'Before\nAfter'); await f.engine.sync();
     f.vault.set('New.md', 'Before\n- [ ] Homework\nAfter'); f.io.modified('New.md'); await f.engine.sync();

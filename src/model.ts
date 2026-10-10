@@ -12,7 +12,7 @@ export interface TaskRecord {
   id: string; uid: string; eventId?: string; locator: Locator; calendarId: string;
   local: Snapshot; baseline: Snapshot; state: TaskState;
   detachedReason?: string; missingSince?: number; lastSeenAt: number;
-  conflicts: Conflict[]; deletionIntent?: boolean;
+  conflicts: Conflict[]; deletionIntent?: boolean; deletionIntentReason?: 'localMissing' | 'remove';
 }
 export interface Settings {
   token: string | null; managed: string[]; defaultCalendar: string;

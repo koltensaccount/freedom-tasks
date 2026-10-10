@@ -13,4 +13,4 @@ Install the attached main.js, manifest.json, and styles.css, or select this prer
 
 See MANUAL_TESTS.md and COMPATIBILITY.md in the repository. No live Nextcloud acceptance is claimed.
 
-Validation: 63 targeted tests passed; TypeScript check and production build passed; Serena TypeScript project health check passed.
+Validation: 64 targeted tests passed; TypeScript check and production build passed; Serena TypeScript project health check passed.
